@@ -4,6 +4,9 @@ import time
 import json
 from datetime import datetime
 import logging
+from io import TextIOWrapper
+import os.path
+
 CONFIGURATION_FILE = "./../config.ini"
 
 def set_log_level(level:str)->None:
@@ -23,23 +26,35 @@ def log_config(config:configparser.ConfigParser)->None:
     logging.info("Lidar timeout: {}".format(config["lidar"]["count"]))
     logging.info("Lidar motor pwm: {}".format(config["lidar"]["motor_pwm"]))
     logging.info("Output file: {}".format(config["file"]["file_path"]))
+
+def calculate_scanning_count(pwm:int,seconds:int)->int:
+    return int(pwm*seconds)
     
 def read_config(path_to_config_file:str):
     config = configparser.ConfigParser()
     config.read(path_to_config_file)
     return config
 
-def write_param_to_file(file)->None:
-    dict_from_json = json.loads(scan)
-    degre = dict_from_json["degre"]
+def write_param_to_file(file: TextIOWrapper,scan:dict)->None:
+    dict_from_json = eval(scan)
+    degre = dict_from_json["angle"]
     distance = dict_from_json["distance"]
     quality = dict_from_json["quality"]
     now = datetime.now()
     logging.debug("Degre: {} Distance: {} quality: {}".format(str(degre),str(distance),str(quality)))
     if quality > 0:
-        file.write(str(now) + "," + str(degre) + "," + str(distance) + "," + str(quality))
+        file.write(str(now) + ";" + str(degre) + ";" + str(distance) + ";" + str(quality) + "\n")
 
-def simple_express_scan(config:configparser.ConfigParser):
+def file_check(file_path:str)->None:
+    if not os.path.isfile(file_path):
+        logging.warning("File does not exists. Creating one...")
+        with open(file_path,"w") as file:
+            logging.info("Writting header in file")
+            file.write("time;degre;distnace;quality\n")
+    else:
+        logging.info("File exists. Appending file...")
+
+def simple_express_scan(config:configparser.ConfigParser)->None:
 
     lidar = PyRPlidar()
     lidar.connect(
@@ -47,23 +62,26 @@ def simple_express_scan(config:configparser.ConfigParser):
         baudrate=int(config["lidar"]["baudrate"]),
         timeout=int(config["lidar"]["timeout"])
         )
-                      
+    lidar.stop()
+    lidar.set_motor_pwm(0)                      
     lidar.set_motor_pwm(int(config["lidar"]["motor_pwm"]))
     time.sleep(2)
-    
-    scan_generator = lidar.start_scan_express(4)
-    with open(config["file"]["file_path"],"a") as file:
-        for count, scan in enumerate(scan_generator()):
-            param_list = get_params_from_scan(scan)
-            if count == int(config["lidar"]["count"]): break
-
+    count_to_run = calculate_scanning_count(config["lidar"]["pwm"],config["lidar"]["seconds_to_run"])
+    try:
+        scan_generator = lidar.start_scan_express(4)
+        file_check(config["file"]["file_path"])
+        with open(config["file"]["file_path"],"a") as file:
+            for count, scan in enumerate(scan_generator()):
+                write_param_to_file(file,str(scan))
+                if count == count_to_run: break
+    except Exception as ex:
+        logging.error(str(ex))
     lidar.stop()
     lidar.set_motor_pwm(0)  
     lidar.disconnect()
-
 
 if __name__ == "__main__":
     config = read_config(CONFIGURATION_FILE)
     set_log_level(config["log"]["level"])
     log_config(config)
-    simple_express_scan()
+    simple_express_scan(config)
