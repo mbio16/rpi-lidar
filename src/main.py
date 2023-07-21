@@ -8,7 +8,8 @@ from io import TextIOWrapper
 import os.path
 
 CONFIGURATION_FILE = "./../config.ini"
-
+MOTOR_STOP_PWM = 0
+SLEEP_TIME = 2
 def set_log_level(level:str)->None:
     FORMAT = '%(levelname)s %(asctime)s %(message)s'
     if level == "INFO":
@@ -62,10 +63,13 @@ def simple_express_scan(config:configparser.ConfigParser)->None:
         baudrate=int(config["lidar"]["baudrate"]),
         timeout=int(config["lidar"]["timeout"])
         )
+    logging.info("Connected to lidar")
+    logging.info("Stopping lidar...")  
     lidar.stop()
-    lidar.set_motor_pwm(0)                      
+    lidar.set_motor_pwm(MOTOR_STOP_PWM)           
+    logging.info("Setting lidar pwm to {}".format(config["lidar"]["motor_pwm"]))     
     lidar.set_motor_pwm(int(config["lidar"]["motor_pwm"]))
-    time.sleep(2)
+    time.sleep(SLEEP_TIME)
     count_to_run = calculate_scanning_count(config["lidar"]["pwm"],config["lidar"]["seconds_to_run"])
     try:
         scan_generator = lidar.start_scan_express(4)
@@ -76,9 +80,12 @@ def simple_express_scan(config:configparser.ConfigParser)->None:
                 if count == count_to_run: break
     except Exception as ex:
         logging.error(str(ex))
+    logging.info("Stopping lidar...")
     lidar.stop()
-    lidar.set_motor_pwm(0)  
+    lidar.set_motor_pwm(MOTOR_STOP_PWM)  
+    logging.info("Lidar stoped")
     lidar.disconnect()
+    logging.info("Lidar disconected")
 
 if __name__ == "__main__":
     config = read_config(CONFIGURATION_FILE)
