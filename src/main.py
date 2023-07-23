@@ -70,7 +70,7 @@ def simple_express_scan(config:configparser.ConfigParser)->None:
     logging.info("Setting lidar pwm to {}".format(config["lidar"]["motor_pwm"]))     
     lidar.set_motor_pwm(int(config["lidar"]["motor_pwm"]))
     time.sleep(SLEEP_TIME)
-    count_to_run = calculate_scanning_count(config["lidar"]["pwm"],config["lidar"]["seconds_to_run"])
+    count_to_run = calculate_scanning_count(int(config["lidar"]["motor_pwm"]),int(config["lidar"]["seconds_to_run"]))
     try:
         scan_generator = lidar.start_scan_express(4)
         file_check(config["file"]["file_path"])
